@@ -6,6 +6,16 @@ WORK_START = (8, 0)    # 8:00 AM
 WORK_END = (16, 30)    # 4:30 PM
 WORK_DAYS = [0, 1, 2, 3, 4]
 
+def get_time_remaining(now):
+    _, end = get_work_bounds(now)
+    if now >= end:
+        return "00:00:00"
+    remaining = end - now
+    total_seconds = int(remaining.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
 def get_work_bounds(now):
     start = now.replace(hour=WORK_START[0], minute=WORK_START[1], second=0, microsecond=0)
     end = now.replace(hour=WORK_END[0], minute=WORK_END[1], second=0, microsecond=0)
@@ -17,6 +27,24 @@ def get_money_earned(now):
         return 0.0
     elapsed = min(now, end) - start
     return (elapsed.total_seconds() / 3600) * HOURLY_RATE
+
+def get_week_earnings(now):
+    weekday = now.weekday()
+    start, end = get_work_bounds(now)
+    day_seconds = (end - start).total_seconds()
+
+    # Full days completed this week
+    completed_days = sum(1 for d in WORK_DAYS if d < weekday)
+    seconds_done = completed_days * day_seconds
+
+    # Add today's partial hours
+    if weekday in WORK_DAYS:
+        if now >= end:
+            seconds_done += day_seconds
+        elif now > start:
+            seconds_done += (now - start).total_seconds()
+
+    return (seconds_done / 3600) * HOURLY_RATE
 
 def get_day_percent_left(now):
     start, end = get_work_bounds(now)
@@ -59,11 +87,11 @@ def display(first=False):
     week_bar = make_bar(100 - week_left)
 
     lines = [
-        f"  🕐  {now.strftime('%I:%M:%S %p')}",
-        f"  💰  Money Earned Today:    ${money:>8.2f}",
+        f"  Clock: {now.strftime('%I:%M:%S %p')} | Remaining: {get_time_remaining(now)}",
+        f"  💰  Money Today: ${money:>8.2f}",
+        f"  💰  Money Week:  ${get_week_earnings(now):>8.2f}",
         f"  📅  Day Left:   {day_left:>5.1f}%  {day_bar}",
         f"  📆  Week Left:  {week_left:>5.1f}%  {week_bar}",
-        f"  (Ctrl+C to exit)",
         "",
     ]
 
@@ -82,3 +110,4 @@ if __name__ == "__main__":
             display()
     except KeyboardInterrupt:
         print("\n  Goodbye! 👋")
+        
