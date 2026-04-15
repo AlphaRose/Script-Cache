@@ -1,0 +1,113 @@
+import time
+from datetime import datetime, timedelta
+
+HOURLY_RATE = 26.00
+WORK_START = (8, 0)    # 8:00 AM
+WORK_END = (16, 30)    # 4:30 PM
+WORK_DAYS = [0, 1, 2, 3, 4]
+
+def get_time_remaining(now):
+    _, end = get_work_bounds(now)
+    if now >= end:
+        return "00:00:00"
+    remaining = end - now
+    total_seconds = int(remaining.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+def get_work_bounds(now):
+    start = now.replace(hour=WORK_START[0], minute=WORK_START[1], second=0, microsecond=0)
+    end = now.replace(hour=WORK_END[0], minute=WORK_END[1], second=0, microsecond=0)
+    return start, end
+
+def get_money_earned(now):
+    start, end = get_work_bounds(now)
+    if now < start:
+        return 0.0
+    elapsed = min(now, end) - start
+    return (elapsed.total_seconds() / 3600) * HOURLY_RATE
+
+def get_week_earnings(now):
+    weekday = now.weekday()
+    start, end = get_work_bounds(now)
+    day_seconds = (end - start).total_seconds()
+
+    # Full days completed this week
+    completed_days = sum(1 for d in WORK_DAYS if d < weekday)
+    seconds_done = completed_days * day_seconds
+
+    # Add today's partial hours
+    if weekday in WORK_DAYS:
+        if now >= end:
+            seconds_done += day_seconds
+        elif now > start:
+            seconds_done += (now - start).total_seconds()
+
+    return (seconds_done / 3600) * HOURLY_RATE
+
+def get_day_percent_left(now):
+    start, end = get_work_bounds(now)
+    total = (end - start).total_seconds()
+    if now <= start:
+        return 100.0
+    if now >= end:
+        return 0.0
+    elapsed = (now - start).total_seconds()
+    return ((total - elapsed) / total) * 100
+
+def get_week_percent_left(now):
+    weekday = now.weekday()
+    start, end = get_work_bounds(now)
+    day_seconds = (end - start).total_seconds()
+    total_work_seconds = len(WORK_DAYS) * day_seconds
+
+    completed_days = sum(1 for d in WORK_DAYS if d < weekday)
+    seconds_done = completed_days * day_seconds
+
+    if weekday in WORK_DAYS:
+        if now >= end:
+            seconds_done += day_seconds
+        elif now > start:
+            seconds_done += (now - start).total_seconds()
+
+    return max(((total_work_seconds - seconds_done) / total_work_seconds) * 100, 0.0)
+
+def make_bar(percent, width=20):
+    filled = int(percent / 100 * width)
+    return "[" + "█" * filled + "░" * (width - filled) + "]"
+
+def display(first=False):
+    now = datetime.now()
+    money = get_money_earned(now)
+    day_left = get_day_percent_left(now)
+    week_left = get_week_percent_left(now)
+
+    day_bar = make_bar(100 - day_left)
+    week_bar = make_bar(100 - week_left)
+
+    lines = [
+        f"  Clock: {now.strftime('%I:%M:%S %p')} | Remaining: {get_time_remaining(now)}",
+        f"  💰  Money Today: ${money:>8.2f}",
+        f"  💰  Money Week:  ${get_week_earnings(now):>8.2f}",
+        f"  📅  Day Left:   {day_left:>5.1f}%  {day_bar}",
+        f"  📆  Week Left:  {week_left:>5.1f}%  {week_bar}",
+        "",
+    ]
+
+    if not first:
+        print(f"\033[{len(lines)}A", end="")
+
+    for line in lines:
+        print(f"\033[2K{line}")
+
+if __name__ == "__main__":
+    print("\n" * 5)
+    display(first=True)
+    try:
+        while True:
+            time.sleep(1)
+            display()
+    except KeyboardInterrupt:
+        print("\n  Goodbye! 👋")
+        
